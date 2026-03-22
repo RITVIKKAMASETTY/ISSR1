@@ -1,0 +1,42 @@
+# ─── Original Colab notebooks (local versions are Notebooklocal*.ipynb) ──────
+Notebook1.ipynb
+Notebook2.ipynb
+
+# ─── Virtual environment ──────────────────────────────────────────────────────
+venv/
+.venv/
+env/
+.env/
+
+# ─── Python cache ─────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# ─── Jupyter internals ────────────────────────────────────────────────────────
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# ─── Audio / data outputs (large binary files) ────────────────────────────────
+*.mp3
+*.flac
+*.ogg
+
+
+# ─── OS artefacts ─────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ─── IDE / editor settings ───────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ─── Misc build / dist ───────────────────────────────────────────────────────
+dist/
+build/
+*.egg-info/

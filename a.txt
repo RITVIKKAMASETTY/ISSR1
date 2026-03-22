@@ -1,0 +1,637 @@
+# Audio Enhancement Pipeline for Team Communication Analysis
+
+## GSoC 2026 Screening Round — Translational Research for Injury Prevention (TRIP) Laboratory
+
+---
+
+## 📋 Table of Contents
+
+- [Project Overview](#project-overview)
+- [Repository Structure](#repository-structure)
+- [Notebook 1: Exploratory Analysis](#notebook-1-exploratory-analysis)
+- [Notebook 2: Audio Enhancement Pipeline](#notebook-2-audio-enhancement-pipeline)
+- [System Architecture](#system-architecture)
+- [Pipeline Flow Diagram](#pipeline-flow-diagram)
+- [Key Results](#key-results)
+- [Installation & Setup](#installation--setup)
+- [Usage Guide](#usage-guide)
+- [Metrics & Evaluation](#metrics--evaluation)
+- [Output Files](#output-files)
+- [Dependencies](#dependencies)
+- [References](#references)
+
+---
+
+## Project Overview
+
+This project implements a complete audio processing pipeline for team communication analysis in human-factors simulated environments. The pipeline processes raw meeting recordings through a structured 4-stage enhancement system, preparing them for downstream tasks including automatic speech recognition (ASR), speaker diarization, and communication pattern analysis.
+
+### Problem Statement
+
+Raw meeting audio contains multiple challenges that degrade downstream analysis:
+
+| Challenge | Impact |
+|-----------|--------|
+| **Background Noise** | HVAC, equipment hum, ambient sounds mask speech |
+| **Channel Mismatch** | Multi-channel recordings require standardization |
+| **Inconsistent Loudness** | Variable recording levels affect ASR accuracy |
+| **Sample Rate Variation** | Different rates break model compatibility |
+
+### Solution Overview
+
+Two-notebook system providing:
+1. **Exploratory Analysis** — Understanding audio characteristics
+2. **Enhancement Pipeline** — 4-stage processing for clean, normalized output
+
+---
+
+## Repository Structure
+├── Notebook1_Exploratory_Analysis.ipynb
+│ ├── Audio loading (sr=None preservation)
+│ ├── Waveform + RMS visualization
+│ ├── Mel spectrogram analysis
+│ ├── Amplitude distribution
+│ ├── Zero crossing rate analysis
+│ ├── dBFS metrics computation
+│ └── Energy-based speech activity detection
+│
+├── Notebook2_Enhancement_Pipeline.ipynb
+│ ├── 4-stage enhancement pipeline
+│ │ ├── Stage 1: Mono Conversion
+│ │ ├── Stage 2: Resampling (16 kHz)
+│ │ ├── Stage 3: Spectral Gating Noise Reduction
+│ │ └── Stage 4: Peak Normalization
+│ ├── Per-stage waveform evolution
+│ ├── Before/after spectrogram comparison
+│ ├── Frequency spectrum analysis
+│ ├── Quantitative metrics computation
+│ └── Enhanced audio export
+│
+├── outputs/
+│ ├── sample_original_4min.wav
+│ ├── enhanced_audio.wav
+│ ├── stage_evolution.png
+│ ├── spectrogram_comparison.png
+│ ├── frequency_comparison.png
+│ └── metrics_bargraph.png
+│
+├── requirements.txt
+└── README.md
+
+text
+
+---
+
+## Notebook 1: Exploratory Analysis
+
+### Objectives
+- Understand acoustic structure of the raw 4-minute recording
+- Establish baseline metrics for quality assessment
+- Preview speech activity patterns
+
+### Key Visualizations
+
+| Panel | Purpose | Key Insight |
+|-------|---------|-------------|
+| **Waveform + RMS** | Amplitude over time with energy envelope | Shows intermittent speech bursts separated by pauses |
+| **Mel Spectrogram** | Frequency content on perceptual Mel scale | Energy concentrated in 100-4000 Hz (speech band) |
+| **Amplitude Distribution** | Histogram of speech-active samples | Bell-shaped distribution typical of healthy speech |
+| **Zero Crossing Rate** | Sign changes per frame | Tracks speech activity; low ZCR = voiced speech |
+
+### Key Metrics (Pre-Enhancement)
+
+| Metric | Value | Interpretation |
+|--------|-------|----------------|
+| Peak Amplitude | 0.2254 | Good headroom, no clipping |
+| RMS Amplitude | 0.0067 | Moderate recording level |
+| Peak dBFS | -12.94 dB | Safe from clipping |
+| RMS dBFS | -43.49 dB | Quiet recording (needs normalization) |
+| Dynamic Range | 30.54 dB | Natural expressive speech |
+| Mean ZCR | 0.1089 | Balanced voiced/unvoiced content |
+| Speech Fraction | ~30% | Typical meeting conversation density |
+
+---
+
+## Notebook 2: Audio Enhancement Pipeline
+
+### Pipeline Architecture
+┌─────────────────────────────────────────────────────────────────┐
+│ Audio Enhancement Pipeline │
+├─────────────────────────────────────────────────────────────────┤
+│ │
+│ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ │
+│ │ Stage 1 │ │ Stage 2 │ │ Stage 3 │ │ Stage 4 │ │
+│ │ Mono │───▶│Resampling│───▶│ Noise │───▶│ Peak │ │
+│ │ Conversion│ │ to 16kHz │ │Reduction │ │Normalize │ │
+│ └──────────┘ └──────────┘ └──────────┘ └──────────┘ │
+│ │ │ │ │ │
+│ ▼ ▼ ▼ ▼ │
+│ Multi-channel ASR-standard Spectral gating Target peak │
+│ → Mono rate prop_decrease=0.8 0.98 │
+│ │
+└─────────────────────────────────────────────────────────────────┘
+
+text
+
+### Stage Details
+
+| Stage | Operation | Parameters | Problem Solved | Critical Ordering |
+|-------|-----------|------------|----------------|------------------|
+| **1** | Mono Conversion | `librosa.to_mono()` | Multi-channel inconsistency | First — cheaper resampling |
+| **2** | Resampling | 16,000 Hz target | ASR compatibility | Before noise reduction (STFT sensitive) |
+| **3** | Noise Reduction | `prop_decrease=0.8`, `stationary=False` | Background noise | After resampling (correct sample rate) |
+| **4** | Peak Normalization | `peak_level=0.98` | Inconsistent loudness | Final stage (clean signal) |
+
+### Spectral Gating Explained
+Input Audio
+│
+▼
+┌─────────────────┐
+│ STFT (FFT) │ ──▶ Time-frequency representation
+└─────────────────┘
+│
+▼
+┌─────────────────┐
+│ Noise Floor │ ──▶ Estimate from quietest frames (20% percentile)
+│ Estimation │
+└─────────────────┘
+│
+▼
+┌─────────────────┐
+│ Masking │ ──▶ Suppress frequencies below noise floor × threshold
+│ (prop=0.8) │ (80% suppression avoids musical noise)
+└─────────────────┘
+│
+▼
+┌─────────────────┐
+│ Inverse STFT │ ──▶ Reconstruct denoised time-domain signal
+└─────────────────┘
+
+text
+
+### Why `prop_decrease = 0.8`?
+
+| Value | Effect |
+|-------|--------|
+| 0.0 | No noise reduction |
+| 0.8 | **Selected** — 80% suppression; balances noise removal with speech preservation |
+| 1.0 | Full suppression; creates musical noise artifacts (discontinuous tones) |
+
+---
+
+## System Architecture
+
+### End-to-End Processing Flow
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ INPUT: Raw Meeting Audio │
+│ (4-minute clip, variable sample rate) │
+└─────────────────────────────────────────────────────────────────────────────┘
+│
+▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ NOTEBOOK 1: Exploratory Analysis │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ ┌─────────────────────────────────────────────────────────────────────┐ │
+│ │ Audio Loading │ sr=None preserves original sample rate│ │
+│ ├─────────────────────────────┼────────────────────────────────────────┤ │
+│ │ Waveform Analysis │ Visual inspection of speech patterns │ │
+│ ├─────────────────────────────┼────────────────────────────────────────┤ │
+│ │ Spectrogram Analysis │ Frequency content (100-4000 Hz speech) │ │
+│ ├─────────────────────────────┼────────────────────────────────────────┤ │
+│ │ dBFS Metrics │ Peak, RMS, Dynamic Range, ZCR │ │
+│ ├─────────────────────────────┼────────────────────────────────────────┤ │
+│ │ Speech Activity Detection │ Energy-based SAD preview │ │
+│ └─────────────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────────┘
+│
+▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ NOTEBOOK 2: Enhancement Pipeline │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ │
+│ ┌────────────────────────────────────────────────────────────────────┐ │
+│ │ enhance_audio() Function │ │
+│ └────────────────────────────────────────────────────────────────────┘ │
+│ │ │
+│ ▼ │
+│ ┌─────────────────────────────────────────────────────────────────────┐ │
+│ │ Stage 1: Mono Conversion │ If multi-channel → collapse to mono │ │
+│ ├───────────────────────────────┼─────────────────────────────────────┤ │
+│ │ Stage 2: Resampling │ 16 kHz (ASR standard) │ │
+│ ├───────────────────────────────┼─────────────────────────────────────┤ │
+│ │ Stage 3: Noise Reduction │ Spectral gating (noisereduce) │ │
+│ ├───────────────────────────────┼─────────────────────────────────────┤ │
+│ │ Stage 4: Peak Normalization │ Scale to 0.98 peak │ │
+│ └─────────────────────────────────────────────────────────────────────┘ │
+│ │ │
+│ ▼ │
+│ ┌─────────────────────────────────────────────────────────────────────┐ │
+│ │ Quantitative Evaluation │ │
+│ ├─────────────────────────────────────────────────────────────────────┤ │
+│ │ • SNR (Signal-to-Noise Ratio) • Dynamic Range │ │
+│ │ • RMS Amplitude • Crest Factor │ │
+│ │ • Mean Zero Crossing Rate • High-Freq Energy Ratio │ │
+│ └─────────────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────────┘
+│
+▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ OUTPUT: Enhanced Audio │
+│ (16 kHz, mono, PCM_16, peak-normalized to 0.98) │
+│ │
+│ ┌─────────────────────────────────────────────────────────────────────┐ │
+│ │ enhanced_audio.wav │ Ready for ASR, diarization │ │
+│ │ stage_evolution.png │ 5-panel waveform transformation │ │
+│ │ spectrogram_comparison.png │ Before/after frequency analysis │ │
+│ │ frequency_comparison.png │ PSD with noise-removed shading │ │
+│ │ metrics_bargraph.png │ Visual quality metrics comparison │ │
+│ └─────────────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+text
+
+---
+
+## Pipeline Flow Diagram
+
+### Detailed Stage-by-Stage Signal Transformation
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│ ORIGINAL AUDIO (16 kHz, mono) │
+│ Peak: 0.2254 | RMS: 0.0067 │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+│
+▼
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│ STAGE 1: Mono Conversion │
+│ ┌─────────────────────────────────────────────────────────────────────────────────┐ │
+│ │ Input: Multi-channel (if applicable) → Output: Mono (1D array) │ │
+│ │ Status: Already mono — no change │ │
+│ └─────────────────────────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+│
+▼
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│ STAGE 2: Resampling to 16 kHz │
+│ ┌─────────────────────────────────────────────────────────────────────────────────┐ │
+│ │ Input: 16,000 Hz → Output: 16,000 Hz │ │
+│ │ Status: Already at target rate — no change │ │
+│ └─────────────────────────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+│
+▼
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│ STAGE 3: Spectral Gating Noise Reduction (prop_decrease=0.8) │
+│ ┌─────────────────────────────────────────────────────────────────────────────────┐ │
+│ │ RMS: 0.006695 → 0.003802 (-43% reduction) │ │
+│ │ High-Freq Energy (>4kHz): 3.07% → 0.63% (-79% reduction) │ │
+│ │ │ │
+│ │ ┌──────────────────────────────────────────────────────────────────────────┐ │ │
+│ │ │ Noise floor estimated from quietest 20% of frames │ │ │
+│ │ │ Frequencies below threshold suppressed with soft masking │ │ │
+│ │ │ Musical noise avoided via prop_decrease < 1.0 │ │ │
+│ │ └──────────────────────────────────────────────────────────────────────────┘ │ │
+│ └─────────────────────────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+│
+▼
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│ STAGE 4: Peak Normalization to 0.98 │
+│ ┌─────────────────────────────────────────────────────────────────────────────────┐ │
+│ │ Peak: 0.174016 → 0.980000 (5.63× scaling) │ │
+│ │ RMS: 0.003802 → 0.021411 (5.63× scaling) │ │
+│ │ │ │
+│ │ y_normalized = y_denoised × (0.98 / peak_before) │ │
+│ └─────────────────────────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+│
+▼
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│ ENHANCED AUDIO (16 kHz, mono) │
+│ Peak: 0.9800 | RMS: 0.0214 │
+│ SNR Improvement: +10.1 dB | HF Noise: -79% │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+
+text
+
+---
+
+## Key Results
+
+### Metrics Comparison (Before vs After Enhancement)
+
+| Metric | Original | Enhanced | Change | Interpretation |
+|--------|----------|----------|--------|----------------|
+| **SNR (dB)** | 30.69 | 40.79 | **+10.1 dB** | Substantial noise reduction |
+| **RMS Amplitude** | 0.0067 | 0.0214 | **+3.2×** | Successful loudness normalization |
+| **Dynamic Range (dB)** | 30.54 | 33.21 | **+2.67 dB** | Cleaner speech/noise separation |
+| **Crest Factor (dB)** | 30.54 | 33.21 | **+2.67 dB** | Improved amplitude variation |
+| **Mean ZCR** | 0.1089 | 0.1287 | **+18.2%** | Waveform sharpening (not noise) |
+| **High-Freq Energy (%)** | 3.07% | 0.63% | **-79.6%** | Effective hiss suppression |
+
+### Visual Validation
+
+| Visualization | Key Observation |
+|---------------|-----------------|
+| **Waveform Evolution** | RMS decreases after denoising (noise removed), increases after normalization (loudness standardization) |
+| **Spectrogram Comparison** | Silent gaps darker in enhanced version; speech bands preserved |
+| **Frequency Spectrum** | Shaded region shows frequencies where noise was removed (50-300 Hz, >6 kHz) |
+
+---
+
+## Installation & Setup
+
+### Prerequisites
+
+- Python 3.8 or higher
+- pip package manager
+
+### Installation Steps
+
+```bash
+# Clone the repository
+git clone <repository-url>
+cd audio-enhancement-pipeline
+
+# Create virtual environment (recommended)
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+requirements.txt
+text
+numpy>=1.24.0
+matplotlib>=3.7.0
+librosa>=0.10.0
+soundfile>=0.12.0
+noisereduce>=3.0.0
+scipy>=1.10.0
+jupyter>=1.0.0
+Usage Guide
+Step 1: Run Notebook 1 — Exploratory Analysis
+python
+# Execute in Jupyter Notebook
+# 1. Load the 4-minute audio clip
+y, sr = librosa.load('sample_original_4min.wav', sr=None, mono=True)
+
+# 2. Generate visualizations
+# - Waveform + RMS
+# - Mel Spectrogram
+# - Amplitude Distribution
+# - Zero Crossing Rate
+
+# 3. Compute dBFS metrics
+# - Peak dBFS
+# - RMS dBFS
+# - Dynamic Range
+# - Silence Threshold
+
+# 4. Run Speech Activity Detection
+# - Energy-based SAD with silence threshold
+Step 2: Run Notebook 2 — Enhancement Pipeline
+python
+# Execute in Jupyter Notebook
+# 1. Load original audio (sr=None critical)
+y_original, sr_original = librosa.load('sample_original_4min.wav', sr=None, mono=True)
+
+# 2. Run enhancement pipeline
+result = enhance_audio(y_original, sr_original)
+
+# 3. Generate evaluation visualizations
+# - stage_evolution.png
+# - spectrogram_comparison.png
+# - frequency_comparison.png
+# - metrics_bargraph.png
+
+# 4. Save enhanced audio
+sf.write('enhanced_audio.wav', result['normalised'], result['sr'], subtype='PCM_16')
+Key Function: enhance_audio()
+python
+def enhance_audio(y: np.ndarray, sr: int,
+                   target_sr: int = 16000,
+                   prop_decrease: float = 0.8,
+                   peak_level: float = 0.98) -> dict:
+    """
+    4-stage audio enhancement pipeline.
+    
+    Parameters:
+    -----------
+    y : np.ndarray
+        Input audio signal
+    sr : int
+        Original sample rate
+    target_sr : int, default=16000
+        Target sample rate for resampling
+    prop_decrease : float, default=0.8
+        Noise reduction aggressiveness (0.0-1.0)
+    peak_level : float, default=0.98
+        Target peak amplitude after normalization
+    
+    Returns:
+    --------
+    dict with keys:
+        'mono' : np.ndarray - After mono conversion
+        'resampled' : np.ndarray - After resampling
+        'denoised' : np.ndarray - After noise reduction
+        'normalised' : np.ndarray - Final enhanced audio
+        'sr' : int - Target sample rate
+    """
+Metrics & Evaluation
+Metric Definitions
+Metric	Formula	Interpretation
+SNR	$10 \cdot \log_{10}\left(\frac{P_{\text{speech}}}{P_{\text{noise}}}\right)$	Higher = less noise
+RMS	$\sqrt{\frac{1}{N}\sum x_i^2}$	Average loudness
+Dynamic Range	$20 \cdot \log_{10}\left(\frac{\text{peak}}{\text{RMS}}\right)$	Peak-to-RMS ratio; higher = more expressive
+Crest Factor	$20 \cdot \log_{10}\left(\frac{\text{peak}}{\text{RMS}}\right)$	Same as dynamic range
+ZCR	$\frac{1}{T-1}\sum_{t=1}^{T-1} \mathbf{1}{{x_t \cdot x{t-1} < 0}}$	High-frequency proxy
+High-Freq Energy	$\frac{\sum_{f > 4\text{kHz}}	X_f	^2}{\sum_f	X_f	^2} \times 100%$	Noise indicator
+Interpretation Guidelines
+Metric	Improvement	What It Means
+SNR ↑	+3-10 dB	Effective noise reduction
+RMS ↑	2-5×	Successful normalization
+Dynamic Range ↑	2-5 dB	Cleaner peak/noise separation
+ZCR	Interpret with HF Energy	ZCR increase ≠ more noise
+HF Energy ↓	50-80%	High-frequency noise suppressed
+Output Files
+File	Description	Size (approx)
+enhanced_audio.wav	Final processed audio (16 kHz, mono, PCM_16)	7.3 MB
+stage_evolution.png	5-panel waveform evolution plot	0.25 MB
+spectrogram_comparison.png	Before/after Mel spectrogram	0.32 MB
+frequency_comparison.png	PSD with noise-removed shading	0.14 MB
+metrics_bargraph.png	Grouped bar chart of quality metrics	0.04 MB
+Enhanced Audio Specifications
+Property	Value
+Format	WAV / PCM_16
+Sample Rate	16,000 Hz
+Channels	Mono
+Bit Depth	16-bit signed integer
+Duration	240.0 seconds (4 minutes)
+Peak Amplitude	0.980000
+RMS Amplitude	0.021411
+Dependencies
+Package	Version	Purpose
+numpy	≥1.24.0	Numerical operations
+matplotlib	≥3.7.0	Visualization
+librosa	≥0.10.0	Audio analysis
+soundfile	≥0.12.0	Audio I/O
+noisereduce	≥3.0.0	Spectral gating noise reduction
+scipy	≥1.10.0	Signal processing
+jupyter	≥1.0.0	Notebook environment
+References
+Key Libraries
+librosa: McFee, B., et al. (2015). librosa: Audio and music signal analysis in Python. Proceedings of the 14th Python in Science Conference.
+
+noisereduce: Sainburg, T. (2019). noisereduce: Noise reduction in Python. GitHub Repository
+
+soundfile: Bailey, B. (2016). PySoundFile: SoundFile library for Python.
+
+Background Reading
+Speech Enhancement: Loizou, P. C. (2013). Speech Enhancement: Theory and Practice. CRC Press.
+
+Spectral Gating: Ephraim, Y., & Malah, D. (1984). Speech enhancement using a minimum mean-square error short-time spectral amplitude estimator. IEEE Transactions on Acoustics, Speech, and Signal Processing.
+
+Project Context
+GSoC 2026: Google Summer of Code application for Translational Research for Injury Prevention (TRIP) Laboratory
+
+Mentors: Joshua White, Piyush Pawar, Dr. Andrea Underhill, Dr. Benjamin McManus, Dr. Amanda Hudson, Dr. Despina Stavrinos
+
+Contact & Acknowledgments
+Project: Team communication processing and analysis in human-factors simulated environment
+Organization: HumanAI (ISSR) — Translational Research for Injury Prevention (TRIP) Laboratory, University of Alabama
+
+Both Notebooks 1 and 2 together constitute the complete Task 1 and Task 2 deliverables for the GSoC 2026 screening round.
+
+# 🎙️ Audio Enhancement & Speech Activity Analysis Pipeline
+
+### GSoC 2026 Screening — Team Communication Processing (TRIP Lab)
+
+---
+
+## 🧠 Project Overview
+
+This project implements a **complete audio preprocessing + enhancement + analysis pipeline** for real-world multi-speaker meeting recordings.
+
+It is designed for:
+
+* **Human-factors research**
+* **Team communication analysis**
+* **Speech processing pipelines (ASR, diarization, NLP)**
+
+---
+
+## 🎯 Objectives
+
+* Clean raw meeting audio using a **robust enhancement pipeline**
+* Understand acoustic structure using **multi-perspective exploratory analysis**
+* Detect **speech vs silence (SAD)**
+* Evaluate improvement using **quantitative metrics**
+
+---
+
+## 🗂️ Dataset
+
+**AliMeeting Eval_Ali (OpenSLR #119)**
+
+* Real-world meeting audio
+* Multi-speaker (2–4 participants)
+* Near-field recordings (clean individual channels)
+
+✔ Chosen because:
+
+* Natural speech patterns (pauses, overlap, turn-taking)
+* Matches real team environments
+* Open-access and reproducible
+
+---
+
+# 🏗️ FULL SYSTEM ARCHITECTURE
+
+```
+                    ┌────────────────────────────┐
+                    │   Raw Audio (.wav file)    │
+                    └────────────┬───────────────┘
+                                 │
+                                 ▼
+                ┌───────────────────────────────┐
+                │ Notebook 1: Data Preparation  │
+                └───────────────────────────────┘
+                                 │
+        ┌─────────────────────────────────────────────┐
+        │                                             │
+        ▼                                             ▼
+ ┌──────────────┐                          ┌────────────────────┐
+ │ File Validate│                          │ 4-Min Clip Extract │
+ │ (sf.info)    │                          │ (safe slicing)     │
+ └──────┬───────┘                          └─────────┬──────────┘
+        │                                            │
+        ▼                                            ▼
+ ┌────────────────────────────────────────────────────────────┐
+ │ Exploratory Analysis (4 Panels)                            │
+ │ - Waveform + RMS                                           │
+ │ - Mel Spectrogram                                          │
+ │ - Amplitude Distribution                                   │
+ │ - Zero Crossing Rate                                       │
+ └────────────────────────────────────────────────────────────┘
+                                 │
+                                 ▼
+                ┌───────────────────────────────┐
+                │ Speech Activity Detection     │
+                │ (Energy-based SAD)           │
+                └────────────┬──────────────────┘
+                             │
+                             ▼
+                 ┌─────────────────────────────┐
+                 │ Clean 4-min Sample Output   │
+                 └────────────┬────────────────┘
+                              │
+                              ▼
+                ┌───────────────────────────────┐
+                │ Notebook 2: Enhancement       │
+                └───────────────────────────────┘
+                              │
+                              ▼
+      ┌──────────────────────────────────────────────┐
+      │ 4-STAGE AUDIO ENHANCEMENT PIPELINE           │
+      └──────────────────────────────────────────────┘
+                              │
+        ┌──────────────┬──────────────┬──────────────┬──────────────┐
+        ▼              ▼              ▼              ▼
+   ┌─────────┐   ┌────────────┐   ┌────────────┐   ┌──────────────┐
+   │ Mono    │ → │ Resample   │ → │ Denoise    │ → │ Normalize    │
+   │ Convert │   │ → 16 kHz   │   │ (Spectral) │   │ Peak=0.98    │
+   └─────────┘   └────────────┘   └────────────┘   └──────────────┘
+                              │
+                              ▼
+      ┌──────────────────────────────────────────────┐
+      │ Evaluation & Analysis                        │
+      └──────────────────────────────────────────────┘
+                              │
+        ┌──────────────┬──────────────┬──────────────┬──────────────┐
+        ▼              ▼              ▼              ▼
+  Waveform       Spectrogram      Frequency       Metrics
+  Evolution      Comparison       Spectrum        (SNR, RMS...)
+                              │
+                              ▼
+                 ┌─────────────────────────────┐
+                 │ Final Enhanced Audio Output │
+                 └─────────────────────────────┘
+```
+
+---
+
+# 📊 NOTEBOOK 1 — EXPLORATORY ANALYSIS
+
+## 🔍 What We Analyzed
+
+| Component           | Purpose                            |
+| ------------------- | ---------------------------------- |
+| Waveform + RMS      | Loudness variation over time       |
+| Mel Spectrogram     | Frequency structure (speech bands) |
+| Amplitude Histogram | Dynamic range                      |
+| ZCR                 | Speech activity proxy              |
+
+---
+
+## 📈 Key Observations
+
+* Speech occurs in **bursts with
