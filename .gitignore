@@ -1,6 +1,6 @@
 # ─── Original Colab notebooks (local versions are Notebooklocal*.ipynb) ──────
-Notebook1.ipynb
-Notebook2.ipynb
+Notebook111.ipynb
+Notebook222.ipynb
 
 # ─── Virtual environment ──────────────────────────────────────────────────────
 venv/
@@ -40,3 +40,4 @@ desktop.ini
 dist/
 build/
 *.egg-info/
+a.txt

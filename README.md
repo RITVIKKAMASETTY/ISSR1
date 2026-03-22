@@ -52,7 +52,7 @@ AliMeeting is the only open-access dataset that combines real meeting conversati
 
 ## System Architecture
 
-![System Architecture](sa.png)
+![System Architecture](utils/sa.png)
 
 ---
 
@@ -223,7 +223,23 @@ y_denoised = nr.reduce_noise(
 
 **How spectral gating works:**
 
-![Spectral Gating Flow](sa.png)
+```
+Audio Signal
+     |
+     v
+STFT (FFT per frame)
+     |
+     v
+Noise floor estimation (from quietest frames)
+     |
+     v
+For each (time, frequency) bin:
+  if power < noise_floor * threshold:
+      suppress by prop_decrease (0.8 = 80% attenuation)
+     |
+     v
+Inverse STFT --> Denoised time-domain signal
+```
 
 **Why `prop_decrease=0.8` and not 1.0?**  
 Setting `prop_decrease=1.0` applies hard masking: bins below the threshold are completely zeroed. This creates discontinuities across time frames that manifest as tonal artefacts called "musical noise" — a ringing, synthetic quality that is often more distracting than the original noise. A value of 0.8 (soft masking) attenuates rather than eliminates, preserving smooth spectral transitions.
